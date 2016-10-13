@@ -20,7 +20,6 @@ class BasicSenderApp : public App {
   private:
 	CinderNDISender mSender;
 	gl::TextureRef			mFrameTexture;
-	gl::TextureRef			mTestTexture;
 	ci::SurfaceRef 			mSurface;
 	qtime::MovieGlRef		mMovie;
 	uint8_t mIndexNew, mIndexOld;
