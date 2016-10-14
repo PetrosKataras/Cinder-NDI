@@ -13,9 +13,14 @@ class CinderNDIReceiver{
 		void update();
 		ci::gl::Texture2dRef getVideoTexture();
 	private:
+		void initConnection();
+	private:
 		bool mNdiInitialized = false;
 		bool mReadToReceive = false;
-		NDIlib_recv_instance_t mNdiReceiver;
 		ci::gl::Texture2dRef mVideoTexture;
+
+		NDIlib_recv_instance_t mNdiReceiver;
+		NDIlib_find_instance_t mNdiFinder;
+		const NDIlib_source_t* mNdiSources = nullptr; // Owned by NDI.
 
 };
