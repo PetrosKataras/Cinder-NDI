@@ -6,7 +6,7 @@ Before building the samples you will need to export the `NDI_SDK_PATH` env varia
 
 Currently only CMake project files for OS X and Linux are provided so you will need the current `android_linux` branch from Cinder's official repo to build the samples. For best results build the release version of Cinder once you have checked out the `android_linux` branch.
 
-Once you have Cinder setup clone the block into the blocks folder and  `cd Cinder/blocks/Cinder-NDI/samples/sampleDir/proj/cmake` && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j4`
+Once you have Cinder setup clone the block into the blocks folder and  `cd Cinder/blocks/Cinder-NDI/samples/sampleDir/proj/cmake && cmake .. -DCMAKE_BUILD_TYPE=Release && make -j4`
 
 Do not forget to `export NDI_SDK_PATH=/path/to/NDI/folder` before attempting to build a sample.
 
