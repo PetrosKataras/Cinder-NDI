@@ -40,7 +40,7 @@ void CinderNDISender::sendSurface( ci::SurfaceRef surface )
 {
 	if( surface ) {
 
-		if( NDIlib_send_get_no_connections( mNdiSender, 10000 ) ) {
+		if( NDIlib_send_get_no_connections( mNdiSender, 0 ) ) {
 
 			NDIlib_tally_t NDI_tally;
 			NDIlib_send_get_tally( mNdiSender, &NDI_tally, 0 );  
