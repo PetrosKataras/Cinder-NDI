@@ -14,7 +14,6 @@ class BasicReceiverApp : public App {
 	void draw() override;
 
   private:
-	CinderNDIReceiver mReceiver;
 };
 
 void prepareSettings( BasicReceiverApp::Settings* settings )
@@ -23,12 +22,10 @@ void prepareSettings( BasicReceiverApp::Settings* settings )
 
 void BasicReceiverApp::setup()
 {
-	mReceiver.setup();
 }
 
 void BasicReceiverApp::update()
 {
-	mReceiver.update();
 	getWindow()->setTitle( "CinderNDI-Receiver - " + std::to_string( (int) getAverageFps() ) + " FPS" );
 
 }
@@ -36,11 +33,6 @@ void BasicReceiverApp::update()
 void BasicReceiverApp::draw()
 {
 	gl::clear( ColorA::black() );
-	auto tex = mReceiver.getVideoTexture();
-	if( tex ) {
-		Rectf centeredRect = Rectf( tex->getBounds() ).getCenteredFit( getWindowBounds(), true );
-		gl::draw( tex, centeredRect );
-	}
 }
 
 // This line tells Cinder to actually create and run the application.

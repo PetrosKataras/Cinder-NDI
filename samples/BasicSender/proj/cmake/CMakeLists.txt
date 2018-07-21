@@ -10,6 +10,7 @@ include( "${CINDER_PATH}/proj/cmake/modules/cinderMakeApp.cmake" )
 set( CINDER_VERBOSE ON )
 ci_make_app( 
 	SOURCES ${SAMPLE_DIR}/src/BasicSenderApp.cpp
+			${SAMPLE_DIR}/src/AsyncSurfaceReader.cpp
 	CINDER_PATH ${CINDER_PATH}
 	BLOCKS Cinder-NDI
 )

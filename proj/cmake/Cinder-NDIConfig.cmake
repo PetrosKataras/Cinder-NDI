@@ -1,11 +1,6 @@
 if( NOT TARGET Cinder-NDI )
 	
-	if( NOT DEFINED ENV{NDI_SDK_PATH} )
-		message( FATAL_ERROR "The env variable NDI_SDK_PATH is not set!" )
-	else()
-		set( NDI_PATH "$ENV{NDI_SDK_PATH}" )
-		message( "NDI_SDK_PATH : " "${NDI_PATH}" )
-	endif()
+	set( NDI_PATH "${CMAKE_CURRENT_LIST_DIR}/../../lib/NDI" )
 
 	get_filename_component( NDI_INCLUDE_PATH "${NDI_PATH}/include" ABSOLUTE )
 
@@ -21,7 +16,7 @@ if( NOT TARGET Cinder-NDI )
 	
 	target_compile_options( Cinder-NDI PRIVATE "-std=c++11" )
 	
-	find_library( NDI_LIBRARY PATHS "${NDI_PATH}/bin/x64" "${NDI_PATH}/lib/x86_64-linux-gnu-5.3" NAMES ndi REQUIRED )
+	find_library( NDI_LIBRARY PATHS "${NDI_PATH}/lib/macos" "${NDI_PATH}/lib/linux" NO_DEFAULT_PATH NAMES ndi.3 REQUIRED )
 	target_link_libraries( Cinder-NDI PUBLIC "${NDI_LIBRARY}" )
 
 	if( NOT TARGET cinder )

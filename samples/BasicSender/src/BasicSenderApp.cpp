@@ -4,12 +4,14 @@
 #include "cinder/gl/Texture.h"
 #include "CinderNDISender.h"
 #include "cinder/qtime/QuickTimeGl.h"
+#include "AsyncSurfaceReader.h"
 using namespace ci;
 using namespace ci::app;
 
+using AsyncSurfaceReaderPtr = std::unique_ptr<AsyncSurfaceReader>;
 class BasicSenderApp : public App {
   public:
-	  BasicSenderApp() : mSender( "test-cinder-video" ){}
+	  BasicSenderApp() {}
 	
 	void setup() override;
 	void update() override;
@@ -18,13 +20,11 @@ class BasicSenderApp : public App {
   private:
 	void loadMovieFile( const fs::path &moviePath );
   private:
-	CinderNDISender mSender;
 	qtime::MovieGlRef		mMovie;
 	gl::TextureRef			mFrameTexture;
 	ci::SurfaceRef 			mSurface;
-	uint8_t mIndexNew, mIndexOld;
-	gl::FboRef mFbo[2];
-	gl::PboRef mPbo[2];
+	AsyncSurfaceReaderPtr 	mAsyncSurfaceReader;
+	CinderNDISenderPtr		mCinderNDISender;
 };
 
 void prepareSettings( BasicSenderApp::Settings* settings )
@@ -56,48 +56,32 @@ void BasicSenderApp::setup()
 		loadMovieFile( moviePath );
 	}
 
-	mIndexNew = 0;
-	mIndexOld = 1;
-
-	mFbo[0] = gl::Fbo::create( getWindowWidth(), getWindowHeight(), false );
-	mFbo[1] = gl::Fbo::create( getWindowWidth(), getWindowHeight(), false );
-
-	mPbo[0] = gl::Pbo::create( GL_PIXEL_PACK_BUFFER, getWindowWidth() * getWindowHeight() * 4, 0, GL_STREAM_READ );
-	mPbo[1] = gl::Pbo::create( GL_PIXEL_PACK_BUFFER, getWindowWidth() * getWindowHeight() * 4, 0, GL_STREAM_READ );
-
-	mSender.setup();
+	mAsyncSurfaceReader = std::make_unique<AsyncSurfaceReader>( getWindowWidth(), getWindowHeight() );
+	CinderNDISender::Description senderDscr;
+	senderDscr.mName = "Cinder_NDI_Sender";
+	senderDscr.mClockVideo = true;
+	mCinderNDISender = std::make_unique<CinderNDISender>( senderDscr );
 }
 
 void BasicSenderApp::update()
 {
 	getWindow()->setTitle( "CinderNDI-Sender - " + std::to_string( (int) getAverageFps() ) + " FPS" );
 
-	if( ! mSurface && mMovie->getTexture() ) {
-		//mSurface = Surface::create( mMovie->getTexture()->createSource() );
-		mSurface = Surface::create( getWindowWidth(), getWindowHeight(), GL_RGBA );
-		mFrameTexture = ci::gl::Texture::create( *mSurface );
-	}
-
-	if( mSurface )
 	{
-		gl::ScopedFramebuffer sFbo( mFbo[mIndexOld] );
-		gl::ScopedBuffer scopedPbo( mPbo[mIndexNew] );
-		
-		gl::readBuffer( GL_COLOR_ATTACHMENT0 );
-		gl::readPixels( 0, 0, mFbo[mIndexOld]->getWidth(), mFbo[mIndexOld]->getHeight(), GL_RGBA, GL_UNSIGNED_BYTE, 0 );
-		mPbo[mIndexOld]->getBufferSubData( 0, mFbo[mIndexOld]->getWidth() * mFbo[mIndexOld]->getHeight() * 4, mSurface->getData() ); 
-	}
-
-	{
-		gl::ScopedFramebuffer sFbo( mFbo[mIndexNew] );
-		gl::ScopedViewport sVp( 0, 0, mFbo[mIndexNew]->getWidth(), mFbo[mIndexNew]->getHeight() );
+		mAsyncSurfaceReader->bind();
+		gl::ScopedViewport sVp( 0, 0, mAsyncSurfaceReader->getWidth(), mAsyncSurfaceReader->getHeight() );
 		gl::clear( ColorA::black() );
 		if( mMovie && mMovie->getTexture() ) {
 			Rectf centeredRect = Rectf( mMovie->getTexture()->getBounds() ).getCenteredFit( getWindowBounds(), true );
 			gl::draw( mMovie->getTexture(), centeredRect );
 		}
+		mAsyncSurfaceReader->unbind();
 	}
-	mSender.sendSurface( mSurface );
+	mSurface = mAsyncSurfaceReader->readPixels();
+	if( mSurface && ! mFrameTexture )
+		mFrameTexture = ci::gl::Texture::create( *mSurface );
+
+	mCinderNDISender->send( mSurface.get() );
 }
 
 void BasicSenderApp::draw()
@@ -105,13 +89,12 @@ void BasicSenderApp::draw()
 	gl::clear( ColorA::black() );
 
 	if( mSurface ) {
-		mFrameTexture->setTopDown( true );
+		//mFrameTexture->setTopDown( true );
 		mFrameTexture->update( *mSurface );
-		mFrameTexture->setTopDown( false );
+		//mFrameTexture->setTopDown( false );
 		Rectf centeredRect = Rectf( mFrameTexture->getBounds() ).getCenteredFit( getWindowBounds(), true );
 		gl::draw( mFrameTexture, centeredRect );
 	}
-	std::swap( mIndexNew, mIndexOld );
 }
 
 // This line tells Cinder to actually create and run the application.
