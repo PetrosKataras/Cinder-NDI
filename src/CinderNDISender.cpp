@@ -5,15 +5,22 @@
 #include "Processing.NDI.Lib.h"
 
 CinderNDISender::CinderNDISender( const Description dscr )
+: mSenderDescription( dscr )
 {
 	if( ! NDIlib_initialize() ) {
 		throw std::runtime_error( "Cannot run NDI on this machine. Probably unsupported CPU." );
 	}
-	NDIlib_send_create_t sendDscr{ dscr.mName.c_str(), dscr.mGroups.c_str(), dscr.mClockVideo, dscr.mClockAudio };
+	NDIlib_send_create_t sendDscr{ mSenderDescription.mName.c_str(), mSenderDescription.mGroups.c_str(), mSenderDescription.mClockVideo, mSenderDescription.mClockAudio };
 	mNDISender = NDIlib_send_create( &sendDscr );
 	if( ! mNDISender ) {
 		throw std::runtime_error( "Cannot create NDI Sender. NDIlib_send_create returned nullptr" );
 	}	
+	if( mSenderDescription.mMetadata != "" ) {
+		NDIConnectionMeta connectionMeta;
+		std::vector<char> cstr( mSenderDescription.mMetadata.c_str(), mSenderDescription.mMetadata.c_str() + mSenderDescription.mMetadata.size() + 1 );
+		connectionMeta.p_data = cstr.data(); 
+		NDIlib_send_add_connection_metadata( mNDISender, &connectionMeta );
+	}
 }
 
 CinderNDISender::~CinderNDISender()
@@ -27,15 +34,52 @@ CinderNDISender::~CinderNDISender()
 	NDIlib_destroy();
 }
 
-void CinderNDISender::send( ci::Surface* surface, const VideoFrameParams* videoFrameParams )
+void CinderNDISender::sendAudio( ci::audio::Buffer* audioBuffer, const AudioFrameParams* audioFrameParams )
+{
+	if( ! mNDISender || ! audioBuffer )
+		return;
+
+	if( NDIlib_send_get_no_connections( mNDISender, 0 ) ) {
+		auto audioFrame = createAudioFrameFromBuffer( audioBuffer, audioFrameParams );
+		if( audioFrame.p_data != nullptr ) {
+			NDIlib_send_send_audio_v2( mNDISender, &audioFrame );
+		}
+	}
+}
+
+NDIAudioFrame CinderNDISender::createAudioFrameFromBuffer( ci::audio::Buffer* audioBuffer, const AudioFrameParams* audioFrameParams )
+{
+	if( ! audioBuffer )
+		return NDIAudioFrame();
+	return {
+		audioFrameParams != nullptr ? audioFrameParams->mSampleRate : DEFAULT_AUDIO_SAMPLE_RATE,
+		static_cast<int>( audioBuffer->getNumChannels() ),
+		static_cast<int>( audioBuffer->getNumFrames() ),
+		audioFrameParams != nullptr ? audioFrameParams->mTimecode : INT64_MAX,
+		audioBuffer->getData(),
+		static_cast<int>( sizeof( float ) * audioBuffer->getNumFrames() ),
+		nullptr,
+		-1
+	};
+}
+
+void CinderNDISender::sendSurface( ci::Surface* surface, const VideoFrameParams* videoFrameParams )
 {
 	if( ! mNDISender || ! surface )
 		return;
 
-	auto videoFrame = createVideoFrameFromSurface( surface, videoFrameParams );	
-	if( videoFrame.p_data != nullptr ) {
-		NDIlib_send_send_video_async_v2( mNDISender, &videoFrame );
-		//NDIlib_send_send_video_v2( mNDISender, &videoFrame );
+	if( NDIlib_send_get_no_connections( mNDISender, 0 ) ) {
+		// Check to see if we have received any connection metadata from the receiver side
+		NDIConnectionMeta rcvMeta;
+		if( NDIlib_send_capture( mNDISender, &rcvMeta, 0 ) ) {
+			CI_LOG_I( "Got meta from receiver: " << rcvMeta.p_data );
+			NDIlib_send_free_metadata( mNDISender, &rcvMeta );
+		}
+		auto videoFrame = createVideoFrameFromSurface( surface, videoFrameParams );	
+		if( videoFrame.p_data != nullptr ) {
+			NDIlib_send_send_video_async_v2( mNDISender, &videoFrame );
+			//NDIlib_send_send_video_v2( mNDISender, &videoFrame );
+		}
 	}
 }
 

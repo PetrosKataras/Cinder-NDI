@@ -5,6 +5,7 @@
 #include "CinderNDISender.h"
 #include "cinder/qtime/QuickTimeGl.h"
 #include "AsyncSurfaceReader.h"
+#include "cinder/audio/audio.h"
 using namespace ci;
 using namespace ci::app;
 
@@ -16,6 +17,8 @@ class BasicSenderApp : public App {
 	void setup() override;
 	void update() override;
 	void draw() override;
+	void keyDown( KeyEvent event ) final;
+	void fileDrop( FileDropEvent event ) final;
 
   private:
 	void loadMovieFile( const fs::path &moviePath );
@@ -25,6 +28,9 @@ class BasicSenderApp : public App {
 	ci::SurfaceRef 			mSurface;
 	AsyncSurfaceReaderPtr 	mAsyncSurfaceReader;
 	CinderNDISenderPtr		mCinderNDISender;
+	audio::BufferPlayerNodeRef		mBufferPlayerNode;
+	audio::GainNodeRef				mGain;
+	audio::SourceFileRef 			mAudioSourceFile;
 };
 
 void prepareSettings( BasicSenderApp::Settings* settings )
@@ -51,6 +57,17 @@ void BasicSenderApp::loadMovieFile( const fs::path &moviePath )
 void BasicSenderApp::setup()
 {
 
+	auto ctx = audio::Context::master();
+
+	mBufferPlayerNode = ctx->makeNode( new audio::BufferPlayerNode() );
+
+	// add a Gain to reduce the volume
+	mGain = ctx->makeNode( new audio::GainNode( 0.7f ) );
+
+	// connect and enable the Context
+	mBufferPlayerNode >> mGain;// >> ctx->getOutput();
+	ctx->enable();
+
 	fs::path moviePath = getOpenFilePath();
 	if( ! moviePath.empty() ) {
 		loadMovieFile( moviePath );
@@ -60,6 +77,7 @@ void BasicSenderApp::setup()
 	CinderNDISender::Description senderDscr;
 	senderDscr.mName = "Cinder_NDI_Sender";
 	senderDscr.mClockVideo = true;
+	senderDscr.mClockAudio = true;
 	mCinderNDISender = std::make_unique<CinderNDISender>( senderDscr );
 }
 
@@ -81,7 +99,12 @@ void BasicSenderApp::update()
 	if( mSurface && ! mFrameTexture )
 		mFrameTexture = ci::gl::Texture::create( *mSurface );
 
-	mCinderNDISender->send( mSurface.get() );
+	//if( mAudioSourceFile ) {
+	//	CinderNDISender::AudioFrameParams audioParams;
+	//	audioParams.mSampleRate = mAudioSourceFile->getSampleRate();
+	//	mCinderNDISender->sendAudio( mBufferPlayerNode->getBuffer().get(), &audioParams );
+	//}
+	mCinderNDISender->sendSurface( mSurface.get() );
 }
 
 void BasicSenderApp::draw()
@@ -89,11 +112,28 @@ void BasicSenderApp::draw()
 	gl::clear( ColorA::black() );
 
 	if( mSurface ) {
-		//mFrameTexture->setTopDown( true );
 		mFrameTexture->update( *mSurface );
-		//mFrameTexture->setTopDown( false );
 		Rectf centeredRect = Rectf( mFrameTexture->getBounds() ).getCenteredFit( getWindowBounds(), true );
 		gl::draw( mFrameTexture, centeredRect );
+	}
+}
+
+void BasicSenderApp::fileDrop( FileDropEvent event )
+{
+	fs::path filePath = event.getFile( 0 );
+	mAudioSourceFile = audio::load( loadFile( filePath ) );
+	// BufferPlayerNode can also load a buffer directly from the SourceFile.
+	// This is safe to call on a background thread, which would alleviate blocking the UI loop.
+	mBufferPlayerNode->loadBuffer( mAudioSourceFile );
+}
+
+void BasicSenderApp::keyDown( KeyEvent event )
+{
+	if( event.getCode() == KeyEvent::KEY_SPACE ) {
+		if( mBufferPlayerNode->isEnabled() )
+			mBufferPlayerNode->stop();
+		else
+			mBufferPlayerNode->start();
 	}
 }
 
