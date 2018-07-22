@@ -10,6 +10,7 @@ CinderNDISender::CinderNDISender( const Description dscr )
 	if( ! NDIlib_initialize() ) {
 		throw std::runtime_error( "Cannot run NDI on this machine. Probably unsupported CPU." );
 	}
+	// Will throw if there is another sender with the same name running on the same LAN at the same time.
 	NDIlib_send_create_t sendDscr{ mSenderDescription.mName.c_str(), mSenderDescription.mGroups.c_str(), mSenderDescription.mClockVideo, mSenderDescription.mClockAudio };
 	mNDISender = NDIlib_send_create( &sendDscr );
 	if( ! mNDISender ) {

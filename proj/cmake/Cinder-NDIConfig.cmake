@@ -10,6 +10,7 @@ if( NOT TARGET Cinder-NDI )
 	
 	add_library( Cinder-NDI "${CINDER_NDI_SOURCE_PATH}/CinderNDIReceiver.cpp"
 							"${CINDER_NDI_SOURCE_PATH}/CinderNDISender.cpp"
+							"${CINDER_NDI_SOURCE_PATH}/CinderNDIFinder.cpp"
 	)
 
 	target_include_directories( Cinder-NDI PUBLIC "${CINDER_NDI_INCLUDE_PATH}" "${NDI_INCLUDE_PATH}" )
