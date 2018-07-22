@@ -19,6 +19,7 @@ class BasicSenderApp : public App {
 	void draw() override;
 	void keyDown( KeyEvent event ) final;
 	void fileDrop( FileDropEvent event ) final;
+	void resize() final;
 
   private:
 	void loadMovieFile( const fs::path &moviePath );
@@ -81,6 +82,11 @@ void BasicSenderApp::setup()
 	mCinderNDISender = std::make_unique<CinderNDISender>( senderDscr );
 }
 
+void BasicSenderApp::resize()
+{
+	mAsyncSurfaceReader.reset( new AsyncSurfaceReader( getWindowWidth(), getWindowHeight() ) );
+}
+
 void BasicSenderApp::update()
 {
 	getWindow()->setTitle( "CinderNDI-Sender - " + std::to_string( (int) getAverageFps() ) + " FPS" );
@@ -96,8 +102,11 @@ void BasicSenderApp::update()
 		mAsyncSurfaceReader->unbind();
 	}
 	mSurface = mAsyncSurfaceReader->readPixels();
-	if( mSurface && ! mFrameTexture )
-		mFrameTexture = ci::gl::Texture::create( *mSurface );
+	if( mSurface ) {
+		if( ! mFrameTexture || ( mFrameTexture->getSize() != mSurface->getSize() ) ) {
+			mFrameTexture = ci::gl::Texture::create( *mSurface );
+		}
+	}
 
 	//if( mAudioSourceFile ) {
 	//	CinderNDISender::AudioFrameParams audioParams;
@@ -110,12 +119,18 @@ void BasicSenderApp::update()
 void BasicSenderApp::draw()
 {
 	gl::clear( ColorA::black() );
-
+	// Check our NDI output.
 	if( mSurface ) {
 		mFrameTexture->update( *mSurface );
 		Rectf centeredRect = Rectf( mFrameTexture->getBounds() ).getCenteredFit( getWindowBounds(), true );
 		gl::draw( mFrameTexture, centeredRect );
 	}
+	/*
+	if( mMovie ) {
+		Rectf centeredRect = Rectf( mMovie->getTexture()->getBounds() ).getCenteredFit( getWindowBounds(), true );
+		gl::draw( mMovie->getTexture(), centeredRect );
+	}
+	*/
 }
 
 void BasicSenderApp::fileDrop( FileDropEvent event )
