@@ -2,12 +2,17 @@
 
 #include <memory>
 #include "cinder/gl/Texture.h"
+#include "cinder/gl/Context.h"
+#include "cinder/ConcurrentCircularBuffer.h"
 #include "CinderNDIFinder.h"
 
 class CinderNDIReceiver;
 using CinderNDIReceiverPtr = std::unique_ptr<CinderNDIReceiver>;
 
 using NDIReceiverPtr = NDIlib_recv_instance_t;
+
+using VideoFramesBuffer = ci::ConcurrentCircularBuffer<ci::gl::TextureRef>;
+using VideoFramesBufferPtr = std::unique_ptr<VideoFramesBuffer>;
 
 class CinderNDIReceiver{
 public:
@@ -35,7 +40,14 @@ public:
 	~CinderNDIReceiver();
 	void connect( const NDISource& source );
 	void disconnect();
-	void receive();
+	ci::gl::TextureRef getVideoTexture();
 private:
-	NDIReceiverPtr mNDIReceiver;
+	void videoRecvThread( ci::gl::ContextRef ctx );
+	void receiveVideo();
+private:
+	NDIReceiverPtr					mNDIReceiver;
+	VideoFramesBufferPtr			mVideoFramesBuffer;
+	std::unique_ptr<std::thread> 	mVideoRecvThread;
+	ci::gl::TextureRef				mVideoTexture;
+	bool							mExitVideoThread{ false };
 };

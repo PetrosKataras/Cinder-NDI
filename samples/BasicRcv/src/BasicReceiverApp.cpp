@@ -39,10 +39,11 @@ void BasicReceiverApp::sourceAdded( const NDISource& source )
 {
 	std::cout << "NDI source added: " << source.p_ndi_name <<std::endl;
 	// Create the NDI receiver for this source
-	CinderNDIReceiver::Description recvDscr;
-	recvDscr.source = &source;
-	if( ! mCinderNDIReceiver )
+	if( ! mCinderNDIReceiver ) {
+		CinderNDIReceiver::Description recvDscr;
+		recvDscr.source = &source;
 		mCinderNDIReceiver = std::make_unique<CinderNDIReceiver>( recvDscr );
+	}
 	else
 		mCinderNDIReceiver->connect( source );
 }
@@ -69,13 +70,16 @@ void BasicReceiverApp::setup()
 void BasicReceiverApp::update()
 {
 	getWindow()->setTitle( "CinderNDI-Receiver - " + std::to_string( (int) getAverageFps() ) + " FPS" );
-	if( mCinderNDIReceiver )
-		mCinderNDIReceiver->receive();
 }
 
 void BasicReceiverApp::draw()
 {
 	gl::clear( ColorA::black() );
+	auto videoTex = mCinderNDIReceiver != nullptr ? mCinderNDIReceiver->getVideoTexture() : nullptr;
+	if( videoTex ) {
+		Rectf centeredRect = Rectf( videoTex->getBounds() ).getCenteredFit( getWindowBounds(), true );
+		gl::draw( videoTex, centeredRect );
+	}
 }
 
 // This line tells Cinder to actually create and run the application.
