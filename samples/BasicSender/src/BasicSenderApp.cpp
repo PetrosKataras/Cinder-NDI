@@ -32,6 +32,8 @@ class BasicSenderApp : public App {
 	audio::BufferPlayerNodeRef		mBufferPlayerNode;
 	audio::GainNodeRef				mGain;
 	audio::SourceFileRef 			mAudioSourceFile;
+	audio::Buffer					mAudioFrame;
+	uint32_t						mAudioFrameOffset;
 };
 
 void prepareSettings( BasicSenderApp::Settings* settings )
@@ -63,10 +65,10 @@ void BasicSenderApp::setup()
 	mBufferPlayerNode = ctx->makeNode( new audio::BufferPlayerNode() );
 
 	// add a Gain to reduce the volume
-	mGain = ctx->makeNode( new audio::GainNode( 0.7f ) );
+	mGain = ctx->makeNode( new audio::GainNode( 1.0f ) );
 
 	// connect and enable the Context
-	mBufferPlayerNode >> mGain;// >> ctx->getOutput();
+	mBufferPlayerNode >> mGain >> ctx->getOutput();
 	ctx->enable();
 
 	fs::path moviePath = getOpenFilePath();
@@ -90,7 +92,25 @@ void BasicSenderApp::resize()
 void BasicSenderApp::update()
 {
 	getWindow()->setTitle( "CinderNDI-Sender - " + std::to_string( (int) getAverageFps() ) + " FPS" );
-
+	// Send the audio
+	if( mBufferPlayerNode && mAudioSourceFile && mBufferPlayerNode->isEnabled() ) {
+		int samplesPerFrame = mAudioSourceFile->getSampleRate() / mCinderNDISender->getFps();
+		int totalFrameNum = mBufferPlayerNode->getNumFrames();
+		if( mAudioFrameOffset < totalFrameNum ) {
+			int distToEof = totalFrameNum - mAudioFrameOffset;
+			if( distToEof < samplesPerFrame )
+				samplesPerFrame = distToEof;
+			CinderNDISender::AudioFrameParams audioParams;
+			audioParams.mSampleRate = mAudioSourceFile->getSampleRate();
+			mAudioFrame = audio::Buffer( samplesPerFrame, mBufferPlayerNode->getNumChannels() );
+			// Copy one frame of audio containing samplesPerFrame and send it to the network.
+			mAudioFrame.copyOffset( *mBufferPlayerNode->getBuffer().get(), samplesPerFrame, 0, mAudioFrameOffset );
+			mCinderNDISender->sendAudio( &mAudioFrame, &audioParams );
+			// Advance our audio frame for the next round.
+			mAudioFrameOffset += samplesPerFrame;
+		}
+	}
+	// Send the video
 	{
 		mAsyncSurfaceReader->bind();
 		gl::ScopedViewport sVp( 0, 0, mAsyncSurfaceReader->getWidth(), mAsyncSurfaceReader->getHeight() );
@@ -102,24 +122,20 @@ void BasicSenderApp::update()
 		mAsyncSurfaceReader->unbind();
 	}
 	mSurface = mAsyncSurfaceReader->readPixels();
+	mCinderNDISender->sendSurface( mSurface.get() );
+	// Create our preview texture
 	if( mSurface ) {
 		if( ! mFrameTexture || ( mFrameTexture->getSize() != mSurface->getSize() ) ) {
 			mFrameTexture = ci::gl::Texture::create( *mSurface );
 		}
 	}
 
-	//if( mAudioSourceFile ) {
-	//	CinderNDISender::AudioFrameParams audioParams;
-	//	audioParams.mSampleRate = mAudioSourceFile->getSampleRate();
-	//	mCinderNDISender->sendAudio( mBufferPlayerNode->getBuffer().get(), &audioParams );
-	//}
-	mCinderNDISender->sendSurface( mSurface.get() );
 }
 
 void BasicSenderApp::draw()
 {
 	gl::clear( ColorA::black() );
-	// Check our NDI output.
+	// Preview our NDI output.
 	if( mSurface ) {
 		mFrameTexture->update( *mSurface );
 		Rectf centeredRect = Rectf( mFrameTexture->getBounds() ).getCenteredFit( getWindowBounds(), true );
@@ -137,9 +153,10 @@ void BasicSenderApp::fileDrop( FileDropEvent event )
 {
 	fs::path filePath = event.getFile( 0 );
 	mAudioSourceFile = audio::load( loadFile( filePath ) );
-	// BufferPlayerNode can also load a buffer directly from the SourceFile.
-	// This is safe to call on a background thread, which would alleviate blocking the UI loop.
 	mBufferPlayerNode->loadBuffer( mAudioSourceFile );
+	mBufferPlayerNode->enable();
+	mBufferPlayerNode->seek( 0.0f );
+	mAudioFrameOffset = 0;
 }
 
 void BasicSenderApp::keyDown( KeyEvent event )
@@ -147,8 +164,9 @@ void BasicSenderApp::keyDown( KeyEvent event )
 	if( event.getCode() == KeyEvent::KEY_SPACE ) {
 		if( mBufferPlayerNode->isEnabled() )
 			mBufferPlayerNode->stop();
-		else
+		else {
 			mBufferPlayerNode->start();
+		}
 	}
 }
 

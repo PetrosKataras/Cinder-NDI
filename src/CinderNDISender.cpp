@@ -69,6 +69,8 @@ void CinderNDISender::sendSurface( ci::Surface* surface, const VideoFrameParams*
 	if( ! mNDISender || ! surface )
 		return;
 
+	mFps = videoFrameParams != nullptr ? float( videoFrameParams->mFrameRateNumerator ) / float( videoFrameParams->mFrameRateDenomenator ) : DEFAULT_FPS; 
+
 	if( NDIlib_send_get_no_connections( mNDISender, 0 ) ) {
 		// Check to see if we have received any connection metadata from the receiver side
 		NDIConnectionMeta rcvMeta;

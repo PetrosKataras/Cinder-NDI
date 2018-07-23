@@ -12,8 +12,9 @@ using NDIFrameType = NDIlib_frame_format_type_e;
 using NDIConnectionMeta = NDIlib_metadata_frame_t;
 using NDIAudioFrame = NDIlib_audio_frame_v2_t;
 
-const int DEFAULT_FRAMERATE_NUMERATOR = 60000;
+const int DEFAULT_FRAMERATE_NUMERATOR = 30000;
 const int DEFAULT_FRAMERATE_DENOMENATOR = 1001;
+const float DEFAULT_FPS = float( DEFAULT_FRAMERATE_NUMERATOR ) / float( DEFAULT_FRAMERATE_DENOMENATOR );
 
 const int DEFAULT_AUDIO_SAMPLE_RATE = 48000;
 
@@ -38,19 +39,20 @@ class CinderNDISender{
 		struct VideoFrameParams {
 			int 		mFrameRateNumerator{ DEFAULT_FRAMERATE_NUMERATOR };
 			int 		mFrameRateDenomenator{ DEFAULT_FRAMERATE_DENOMENATOR };	
-			int64_t		mTimecode{ INT64_MAX };
+			int64_t		mTimecode{ NDIlib_send_timecode_synthesize };
 			FrameType 	mFrameType{ PROGRESSIVE };
 			std::string mMetadata;
 			
 		};
 		struct AudioFrameParams {
 			int			mSampleRate{ DEFAULT_AUDIO_SAMPLE_RATE };
-			int64_t		mTimecode{ INT64_MAX };
+			int64_t		mTimecode{ NDIlib_send_timecode_synthesize };
 		};
 		CinderNDISender( const Description dscr );
 		~CinderNDISender();
 		void sendSurface( ci::Surface* surface, const VideoFrameParams* videoFrameParams = nullptr );
 		void sendAudio( ci::audio::Buffer* audioBuffer, const AudioFrameParams* audioFrameParams = nullptr );
+		float getFps() { return mFps; }
 	private:
 		NDIlib_FourCC_type_e	getNDIColorFormatFromSurface( ci::SurfaceChannelOrder colorFormat );
 		NDIFrameType			getNDIFrameType( FrameType frameType );
@@ -59,4 +61,5 @@ class CinderNDISender{
 	private:
 		NDISenderPtr			mNDISender{ nullptr };
 		Description				mSenderDescription;
+		float					mFps{ DEFAULT_FPS };
 };
