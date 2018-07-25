@@ -1,9 +1,9 @@
 #include "CinderNDIReceiver.h"
-#include <cstdio>
 #define CI_MIN_LOG_LEVEL 2
 #include "cinder/Log.h"
 #include "cinder/Surface.h"
 #include "cinder/gl/Sync.h"
+#include "cinder/audio/Context.h"
 
 CinderNDIReceiver::CinderNDIReceiver( const Description dscr )
 {
@@ -23,13 +23,20 @@ CinderNDIReceiver::CinderNDIReceiver( const Description dscr )
 	mVideoFramesBuffer = std::make_unique<VideoFramesBuffer>( 5 );
 	auto ctx = ci::gl::Context::create( ci::gl::context() );
 	mVideoRecvThread = std::make_unique<std::thread>( std::bind( &CinderNDIReceiver::videoRecvThread, this, ctx ) );
+	mAudioRecvThread = std::make_unique<std::thread>( std::bind( &CinderNDIReceiver::audioRecvThread, this ) );
 }
 
 CinderNDIReceiver::~CinderNDIReceiver()
 {
-	mExitVideoThread = true;
-	mVideoFramesBuffer->cancel();
-	mVideoRecvThread->join();
+	{
+		mExitVideoThread = true;
+		mVideoFramesBuffer->cancel();
+		mVideoRecvThread->join();
+	}
+	{
+		mExitAudioThread = true;
+		mAudioRecvThread->join();
+	}
 
 	if( mNDIReceiver ) {
 		NDIlib_recv_destroy( mNDIReceiver );
@@ -43,6 +50,13 @@ void CinderNDIReceiver::videoRecvThread( ci::gl::ContextRef ctx )
 	ctx->makeCurrent();
 	while( ! mExitVideoThread ) {
 		receiveVideo();
+	}
+}
+
+void CinderNDIReceiver::audioRecvThread()
+{
+	while( ! mExitAudioThread ) {
+		receiveAudio();
 	}
 }
 
@@ -89,3 +103,55 @@ void CinderNDIReceiver::receiveVideo()
 		}
 	}
 }
+
+void CinderNDIReceiver::receiveAudio()
+{
+	NDIlib_audio_frame_v2_t audioFrame;
+	// NDIlib_recv_capture_v2 should be safe to call at the same time from multiple threads according to the SDK.
+	// e.g To capture video and audio at the same time from separate threads for example.
+	// Wait max .5 sec for a new frame to arrive.
+	switch( NDIlib_recv_capture_v2( mNDIReceiver, nullptr, &audioFrame, nullptr, 50 ) ) { 
+		case NDIlib_frame_type_none:
+		{
+			CI_LOG_V( "No data available...." ); 
+			break;
+		}
+		case NDIlib_frame_type_audio:
+		{
+			CI_LOG_V( "Received audio frame with no_samples : " << audioFrame.no_samples << " channels: " << audioFrame.no_channels << " channel stride: " << audioFrame.channel_stride_in_bytes ); 
+			{
+				std::lock_guard<std::mutex> lock( mAudioMutex );
+				if( ! mCurrentAudioBuffer || mCurrentAudioBuffer->getNumChannels() != audioFrame.no_channels ) {
+					auto framesPerBlock = ci::audio::Context::master()->getFramesPerBlock();
+					mCurrentAudioBuffer = std::make_shared<ci::audio::Buffer>( framesPerBlock, audioFrame.no_channels );
+					for( auto& buffer : mRingBuffers ) {
+						buffer.clear();
+					}
+					mRingBuffers.clear();
+					for( size_t ch = 0; ch < audioFrame.no_channels; ch++ ) {
+						mRingBuffers.emplace_back( audioFrame.no_samples * audioFrame.no_channels );
+					}
+				}
+			}
+			for( size_t ch = 0; ch < audioFrame.no_channels; ch++ ) {
+				mRingBuffers[ch].write( audioFrame.p_data + ch * audioFrame.no_samples, audioFrame.no_samples );
+			}
+			NDIlib_recv_free_audio_v2( mNDIReceiver, &audioFrame );
+			break;
+		}
+	}
+}
+
+ci::audio::BufferRef CinderNDIReceiver::getAudioBuffer()
+{
+	std::lock_guard<std::mutex> lock( mAudioMutex );
+	if( mCurrentAudioBuffer ) {
+		for( size_t ch = 0; ch < mCurrentAudioBuffer->getNumChannels(); ch++ ) {
+			if( ! mRingBuffers[ch].read( mCurrentAudioBuffer->getChannel( ch ), mCurrentAudioBuffer->getNumFrames() ) ) {
+				mCurrentAudioBuffer->zero();
+			}
+		}
+	}
+	return mCurrentAudioBuffer;
+}
+

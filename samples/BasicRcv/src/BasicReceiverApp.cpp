@@ -3,6 +3,8 @@
 #include "cinder/gl/gl.h"
 #include "CinderNDIReceiver.h"
 #include "CinderNDIFinder.h"
+#include "cinder/audio/Voice.h"
+#include "cinder/audio/Context.h"
 
 using namespace ci;
 using namespace ci::app;
@@ -16,11 +18,13 @@ public:
 private:
 	void sourceAdded( const NDISource& source );
 	void sourceRemoved( const std::string sourceName );
+	void audioOut( ci::audio::Buffer* audioOutBuffer, size_t sampleRate );
 private:
 	CinderNDIFinderPtr mCinderNDIFinder;
 	CinderNDIReceiverPtr mCinderNDIReceiver;
 	ci::signals::Connection mNDISourceAdded;
 	ci::signals::Connection mNDISourceRemoved;
+	ci::audio::VoiceRef	mNDIVoice;
 };
 
 void prepareSettings( BasicReceiverApp::Settings* settings )
@@ -55,6 +59,15 @@ void BasicReceiverApp::sourceRemoved( std::string sourceName )
 
 void BasicReceiverApp::setup()
 {
+	mNDIVoice = ci::audio::Voice::create( [ this ] ( ci::audio::Buffer* buffer, size_t sampleRate ) {			
+		if( mCinderNDIReceiver ) {
+			auto audioBuffer = mCinderNDIReceiver->getAudioBuffer();
+			if( audioBuffer && ! audioBuffer->isEmpty() ) {
+				buffer->copy( *audioBuffer.get() );
+			}
+		}
+	}, ci::audio::Voice::Options().channels( 2 ));
+	mNDIVoice->start();
 	// Create the NDI finder
 	CinderNDIFinder::Description finderDscr;
 	mCinderNDIFinder = std::make_unique<CinderNDIFinder>( finderDscr );

@@ -4,6 +4,8 @@
 #include "cinder/gl/Texture.h"
 #include "cinder/gl/Context.h"
 #include "cinder/ConcurrentCircularBuffer.h"
+#include "cinder/audio/Buffer.h"
+#include "cinder/audio/dsp/RingBuffer.h"
 #include "CinderNDIFinder.h"
 
 class CinderNDIReceiver;
@@ -13,6 +15,9 @@ using NDIReceiverPtr = NDIlib_recv_instance_t;
 
 using VideoFramesBuffer = ci::ConcurrentCircularBuffer<ci::gl::TextureRef>;
 using VideoFramesBufferPtr = std::unique_ptr<VideoFramesBuffer>;
+
+using AudioFramesBuffer = ci::ConcurrentCircularBuffer<ci::audio::BufferRef>;
+using AudioFramesBufferPtr = std::unique_ptr<AudioFramesBuffer>;
 
 class CinderNDIReceiver{
 public:
@@ -41,13 +46,23 @@ public:
 	void connect( const NDISource& source );
 	void disconnect();
 	ci::gl::TextureRef getVideoTexture();
+	ci::audio::BufferRef getAudioBuffer();
 private:
 	void videoRecvThread( ci::gl::ContextRef ctx );
 	void receiveVideo();
+	void audioRecvThread();
+	void receiveAudio();
 private:
 	NDIReceiverPtr					mNDIReceiver;
+
 	VideoFramesBufferPtr			mVideoFramesBuffer;
 	std::unique_ptr<std::thread> 	mVideoRecvThread;
 	ci::gl::TextureRef				mVideoTexture;
+	
+	std::unique_ptr<std::thread> 	mAudioRecvThread;
+	ci::audio::BufferRef			mCurrentAudioBuffer;
+	std::vector<ci::audio::dsp::RingBuffer> 		mRingBuffers;
+	std::mutex						mAudioMutex;
 	bool							mExitVideoThread{ false };
+	bool							mExitAudioThread{ false };
 };

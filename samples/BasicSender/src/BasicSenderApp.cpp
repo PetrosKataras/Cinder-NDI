@@ -65,7 +65,7 @@ void BasicSenderApp::setup()
 	mBufferPlayerNode = ctx->makeNode( new audio::BufferPlayerNode() );
 
 	// add a Gain to reduce the volume
-	mGain = ctx->makeNode( new audio::GainNode( 1.0f ) );
+	mGain = ctx->makeNode( new audio::GainNode( 0.0f ) );
 
 	// connect and enable the Context
 	mBufferPlayerNode >> mGain >> ctx->getOutput();
@@ -94,14 +94,14 @@ void BasicSenderApp::update()
 	getWindow()->setTitle( "CinderNDI-Sender - " + std::to_string( (int) getAverageFps() ) + " FPS" );
 	// Send the audio
 	if( mBufferPlayerNode && mAudioSourceFile && mBufferPlayerNode->isEnabled() ) {
-		int samplesPerFrame = mAudioSourceFile->getSampleRate() / mCinderNDISender->getFps();
+		int samplesPerFrame = ci::audio::Context::master()->getSampleRate() / mCinderNDISender->getFps();
 		int totalFrameNum = mBufferPlayerNode->getNumFrames();
 		if( mAudioFrameOffset < totalFrameNum ) {
 			int distToEof = totalFrameNum - mAudioFrameOffset;
 			if( distToEof < samplesPerFrame )
 				samplesPerFrame = distToEof;
 			CinderNDISender::AudioFrameParams audioParams;
-			audioParams.mSampleRate = mAudioSourceFile->getSampleRate();
+			audioParams.mSampleRate = ci::audio::Context::master()->getSampleRate();
 			mAudioFrame = audio::Buffer( samplesPerFrame, mBufferPlayerNode->getNumChannels() );
 			// Copy one frame of audio containing samplesPerFrame and send it to the network.
 			mAudioFrame.copyOffset( *mBufferPlayerNode->getBuffer().get(), samplesPerFrame, 0, mAudioFrameOffset );
